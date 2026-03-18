@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Форма</title>
+		<link rel="stylesheet" href="style.css" />
+	</head>
+	<body>
+		<form class="form-style">
+			<fieldset class="fieldset-style">
+				<legend class="legend-style">Ваши личные данные</legend>
+				<label class="label-style">
+					Ваше имя
+					<input
+						class="input-style"
+						type="text"
+						name="name"
+						placeholder="Имя"
+						required
+					/>
+				</label>
+				<label class="label-style">
+					Возраст
+					<input
+						class="input-style"
+						type="number"
+						inputmode="numeric"
+						name="age"
+						placeholder="Возраст"
+						required
+					/>
+				</label>
+				<label class="label-style">
+					Ваш номер телефона
+					<input
+						class="input-style"
+						type="tel"
+						inputmode="numeric"
+						name="tel"
+						placeholder="Номер телефона"
+						required
+					/>
+				</label>
+				<label class="label-style">
+					Ваша почта
+					<input
+						class="input-style"
+						type="text"
+						name="email"
+						placeholder="Почта"
+						required
+					/>
+				</label>
+				<label class="label-style"
+					>Сообщение
+					<textarea
+						class="textarea-style"
+						placeholder="Сообщение"
+						name="message"
+						required
+					></textarea>
+				</label>
+			</fieldset>
+			<span class="galochka-style">
+				<label class="label-style">
+					<input
+						class="checkbox-style"
+						type="checkbox"
+						name="checkbox"
+						required
+					/>
+					Я принимаю правила
+				</label>
+			</span>
+			<button class="button-style">Отправить</button>
+		</form>
+	</body>
+</html>
