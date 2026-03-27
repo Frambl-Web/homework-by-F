@@ -111,8 +111,8 @@ p {
 
 .article-play-button {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 45%;
+  left: 48%;
   display: flex;
   align-items: center;
   justify-content: center;
