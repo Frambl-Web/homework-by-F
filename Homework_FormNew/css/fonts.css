@@ -1,0 +1,10 @@
+@font-face {
+	font-family: "Roboto";
+	src:
+		local("Roboto_Condensed-Bold.ttf"),
+		url(http://fonts.gstatic.com/s/roboto/v15/mErvLBYg_cXG3rLvUsKT_fesZW2xOQ-xsNqO47m55DA.woff2) format("ttf");
+	src: url(../fonts/Roboto_Condensed-Bold.ttf);
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
