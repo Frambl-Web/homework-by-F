@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Mind Map Pro — Фикс стрелок</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: linear-gradient(145deg, #f3e8ff 0%, #e9d5ff 100%);
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            touch-action: none;
+            position: fixed;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(107, 70, 193, 0.94);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px 12px;
+            z-index: 1000;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            border-bottom: 1px solid rgba(255, 220, 255, 0.4);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .toolbar button {
+            background: #ffffffdd;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: inherit;
+            color: #4a1d6d;
+        }
+
+        .toolbar button i { font-size: 13px; pointer-events: none; }
+        .toolbar button:active { transform: scale(0.96); }
+        .toolbar .btn-primary { background: #c084fc; color: #2e1065; }
+        .toolbar .btn-danger { background: #f472b6; color: white; }
+        .toolbar .btn-save { background: #8b5cf6; color: white; }
+        .toolbar .btn-export { background: #d8b4fe; color: #3b0764; }
+        .toolbar .btn-undo { background: #fbbf24; color: #3b0764; }
+        .toolbar .btn-zoom-fit { background: #34d399; color: #064e3b; }
+
+        .status-msg {
+            background: #2e1065cc;
+            color: #f3e8ff;
+            padding: 4px 10px;
+            border-radius: 30px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        #viewport {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            margin-top: 68px;
+            touch-action: none;
+            background: #faf5ff;
+            background-image: radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.08) 2%, transparent 2.5%);
+            background-size: 28px 28px;
+        }
+
+        #mindmap-canvas-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #mindmap-nodes-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: 0 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        .node {
+            position: absolute;
+            border-radius: 28px;
+            padding: 10px 18px;
+            min-width: 100px;
+            max-width: 350px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            border: 1px solid rgba(255,255,255,0.5);
+            cursor: grab;
+            transition: box-shadow 0.2s;
+            font-weight: 500;
+            word-break: break-word;
+            font-size: 14px;
+            backdrop-filter: blur(2px);
+            will-change: transform;
+            touch-action: none;
+        }
+        .node:active { cursor: grabbing; }
+        .node.editing {
+            outline: 3px solid #c084fc;
+            background: #f3e8ff !important;
+            cursor: text;
+            z-index: 100;
+        }
+        .node .node-content {
+            outline: none;
+            white-space: pre-wrap;
+            padding-right: 8px;
+            pointer-events: auto;
+            color: #2e1065;
+            font-weight: 500;
+        }
+        .node .node-actions {
+            position: absolute;
+            top: -14px;
+            right: -14px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            background: rgba(107, 70, 193, 0.9);
+            border-radius: 40px;
+            padding: 5px 10px;
+            backdrop-filter: blur(8px);
+            z-index: 20;
+            pointer-events: auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .node:hover .node-actions,
+        .node .node-actions:active { opacity: 1; }
+        @media (max-width: 768px) {
+            .node .node-actions { opacity: 0; }
+            .node.touch-active .node-actions { opacity: 1; }
+        }
+        .node-actions button {
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            font-size: 13px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #4c1d95;
+            transition: transform 0.05s;
+            touch-action: manipulation;
+        }
+        .node-actions button:active { transform: scale(0.92); }
+        .node-actions button.add-child { background: #a855f7; color: white; }
+        .node-actions button.delete-node { background: #f43f5e; color: white; }
+        .node-actions button.edit-text { background: #fbbf24; color: #3b0764; }
+
+        .resize-handle {
+            position: absolute;
+            bottom: -8px;
+            right: -8px;
+            width: 20px;
+            height: 20px;
+            background: #c084fc;
+            border-radius: 50%;
+            cursor: nw-resize;
+            z-index: 25;
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            pointer-events: auto;
+            touch-action: none;
+        }
+        .resize-handle:active { background: #a855f7; }
+
+        .instruction {
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(107, 70, 193, 0.85);
+            color: #f3e8ff;
+            padding: 5px 12px;
+            border-radius: 24px;
+            font-size: 10px;
+            backdrop-filter: blur(6px);
+            pointer-events: none;
+            z-index: 100;
+            font-weight: 500;
+        }
+
+        #export-container {
+            position: fixed;
+            top: -99999px;
+            left: -99999px;
+            z-index: -1;
+            background: #faf5ff;
+            overflow: visible;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <button id="btn-undo" class="btn-undo"><i class="fas fa-undo-alt"></i> Отменить</button>
+    <button id="btn-add-root"><i class="fas fa-plus-circle"></i> Центр</button>
+    <button id="btn-zoom-fit" class="btn-zoom-fit"><i class="fas fa-expand-alt"></i> Показать всё</button>
+    <button id="btn-save-storage" class="btn-save"><i class="fas fa-save"></i> Сохранить</button>
+    <button id="btn-load" class="btn-primary"><i class="fas fa-folder-open"></i> Загрузить</button>
+    <button id="btn-export-png" class="btn-export"><i class="fas fa-camera"></i> PNG</button>
+    <button id="btn-export-jpeg" class="btn-export"><i class="fas fa-image"></i> JPEG</button>
+    <button id="btn-export-pdf" class="btn-export"><i class="fas fa-file-pdf"></i> PDF</button>
+    <button id="btn-clear" class="btn-danger"><i class="fas fa-trash-alt"></i> Очистить</button>
+    <span class="status-msg" id="statusMsg">✨ Готово</span>
+</div>
+
+<div id="viewport">
+    <canvas id="mindmap-canvas-layer"></canvas>
+    <div id="mindmap-nodes-layer"></div>
+</div>
+
+<div id="export-container"></div>
+
+<div class="instruction">
+    <i class="fas fa-arrows-alt"></i> Тащите блок | ✨ Уголок — меняйте размер | ✌️ Два пальца — масштаб
+</div>
+
+<script>
+(function(){
+    const viewport      = document.getElementById('viewport');
+    const nodesLayer    = document.getElementById('mindmap-nodes-layer');
+    const lineCanvas    = document.getElementById('mindmap-canvas-layer');
+    const exportContainer = document.getElementById('export-container');
+    let ctx = lineCanvas.getContext('2d');
+
+    let nodes = [];
+    let nextId = 1;
+    let historyStack = [];
+    let historyIndex = -1;
+
+    let scale = 1, panX = 0, panY = 0;
+    let initialPinchDistance = 0;
+    let pinchStartScale = 1, pinchStartPanX = 0, pinchStartPanY = 0;
+    let pinchCenterX = 0, pinchCenterY = 0;
+    let activePinch = false;
+    let isPanning = false, panStartX = 0, panStartY = 0;
+
+    let dragTarget = null, dragOffsetX = 0, dragOffsetY = 0;
+    let isDraggingNode = false, activeTouchId = null;
+    let editingNodeId = null;
+
+    let resizeTarget = null;
+    let resizeStartWidth = 0, resizeStartHeight = 0;
+    let resizeStartX = 0, resizeStartY = 0;
+    let isResizing = false;
+
+    const UNIFIED_BG = "linear-gradient(135deg, #f9f3ff, #f0e6fe)";
+    const UNIFIED_BORDER = "#c084fc";
+
+    function getUnifiedNodeStyle() {
+        return { bg: UNIFIED_BG, border: UNIFIED_BORDER };
+    }
+
+    function saveToHistory() {
+        const state = { nodes: JSON.parse(JSON.stringify(nodes)), nextId };
+        if (historyIndex < historyStack.length - 1)
+            historyStack = historyStack.slice(0, historyIndex + 1);
+        historyStack.push(state);
+        if (historyStack.length > 50) historyStack.shift();
+        historyIndex = historyStack.length - 1;
+    }
+
+    function undo() {
+        if (historyIndex <= 0) { updateStatus('❌ Нечего отменять'); return; }
+        historyIndex--;
+        const prev = historyStack[historyIndex];
+        nodes = JSON.parse(JSON.stringify(prev.nodes));
+        nextId = prev.nextId;
+        renderAllNodes();
+        applyUnifiedColorsToAllNodes();
+        saveToLocalStorageSilent();
+        updateStatus('↩️ Отменено');
+    }
+
+    function withHistory(action) {
+        saveToHistory();
+        action();
+        renderAllNodes();
+        applyUnifiedColorsToAllNodes();
+        saveToLocalStorage();
+    }
+
+    function resizeAndUpdate() {
+        const rect = viewport.getBoundingClientRect();
+        lineCanvas.width  = rect.width;
+        lineCanvas.height = rect.height;
+        lineCanvas.style.width  = `${rect.width}px`;
+        lineCanvas.style.height = `${rect.height}px`;
+        updateTransform();
+        drawAllLines();
+    }
+
+    function updateTransform() {
+        nodesLayer.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
+        drawAllLines();
+    }
+
+    // Функция отрисовки стрелок с ФИКСИРОВАННЫМ размером, не зависящим от масштаба
+    function drawArrow(c, sx, sy, ex, ey, color, lineWidth) {
+        c.beginPath();
+        c.moveTo(sx, sy);
+        c.lineTo(ex, ey);
+        c.strokeStyle = color;
+        c.lineWidth = lineWidth;
+        c.shadowBlur = 0;
+        c.stroke();
+        
+        // Фиксированный размер наконечника стрелки (в пикселях экрана)
+        // Не зависит от scale карты, всегда читаемый
+        const arrowSize = 10; // постоянный размер в пикселях canvas
+        const angle = Math.atan2(ey - sy, ex - sx);
+        // Отступ, чтобы стрелка не перекрывала блок
+        const backOffset = 12;
+        const ax = ex - backOffset * Math.cos(angle);
+        const ay = ey - backOffset * Math.sin(angle);
+        
+        c.fillStyle = color;
+        c.beginPath();
+        c.moveTo(ax, ay);
+        c.lineTo(ax - arrowSize * Math.cos(angle - Math.PI/6), ay - arrowSize * Math.sin(angle - Math.PI/6));
+        c.lineTo(ax - arrowSize * Math.cos(angle + Math.PI/6), ay - arrowSize * Math.sin(angle + Math.PI/6));
+        c.fill();
+    }
+
+    function drawAllLines() {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, lineCanvas.width, lineCanvas.height);
+        if (!nodes.length) return;
+        
+        const containerRect = viewport.getBoundingClientRect();
+        
+        for (const node of nodes) {
+            if (node.parentId === null) continue;
+            const parentNode = nodes.find(n => n.id === node.parentId);
+            if (!parentNode) continue;
+            
+            const fromEl = document.getElementById(`node-${parentNode.id}`);
+            const toEl   = document.getElementById(`node-${node.id}`);
+            if (!fromEl || !toEl) continue;
+            
+            const fr = fromEl.getBoundingClientRect();
+            const tr = toEl.getBoundingClientRect();
+            
+            // Центры блоков в координатах canvas
+            const sx = (fr.left + fr.right)  / 2 - containerRect.left;
+            const sy = (fr.top  + fr.bottom) / 2 - containerRect.top;
+            const ex = (tr.left + tr.right)  / 2 - containerRect.left;
+            const ey = (tr.top  + tr.bottom) / 2 - containerRect.top;
+            
+            // Толщина линии также фиксированная, не зависит от масштаба
+            drawArrow(ctx, sx, sy, ex, ey, '#b77cff', 2.5);
+        }
+    }
+
+    function applyUnifiedColorsToAllNodes() {
+        const allNodeDivs = document.querySelectorAll('.node');
+        allNodeDivs.forEach(div => {
+            const unified = getUnifiedNodeStyle();
+            div.style.background = unified.bg;
+            div.style.border     = `1px solid ${unified.border}`;
+        });
+    }
+
+    function renderAllNodes() {
+        nodesLayer.innerHTML = '';
+        nodes.forEach(n => createNodeElement(n));
+        drawAllLines();
+    }
+
+    function createNodeElement(node) {
+        const div = document.createElement('div');
+        div.className   = 'node';
+        div.id          = `node-${node.id}`;
+        div.style.left  = `${node.x}px`;
+        div.style.top   = `${node.y}px`;
+        div.style.position    = 'absolute';
+        div.style.touchAction = 'none';
+        if (node.width)  div.style.width  = `${node.width}px`;
+        if (node.height && node.height !== 'auto') div.style.height = `${node.height}px`;
+
+        const unified = getUnifiedNodeStyle();
+        div.style.background = unified.bg;
+        div.style.border     = `1px solid ${unified.border}`;
+
+        const contentSpan = document.createElement('div');
+        contentSpan.className  = 'node-content';
+        contentSpan.innerText  = node.text || 'Новый блок';
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'node-actions';
+
+        const addBtn = document.createElement('button');
+        addBtn.innerHTML = '<i class="fas fa-plus"></i>';
+        addBtn.onclick      = e => { e.stopPropagation(); addChildNode(node.id); };
+        addBtn.ontouchstart = e => { e.stopPropagation(); e.preventDefault(); addChildNode(node.id); };
+
+        const editBtn = document.createElement('button');
+        editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+        editBtn.onclick      = e => { e.stopPropagation(); startEditing(node.id); };
+        editBtn.ontouchstart = e => { e.stopPropagation(); e.preventDefault(); startEditing(node.id); };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.onclick      = e => { e.stopPropagation(); deleteNodeAndChildren(node.id); };
+        deleteBtn.ontouchstart = e => { e.stopPropagation(); e.preventDefault(); deleteNodeAndChildren(node.id); };
+
+        actionsDiv.append(addBtn, editBtn, deleteBtn);
+        div.appendChild(actionsDiv);
+        div.appendChild(contentSpan);
+
+        const resizeHandle = document.createElement('div');
+        resizeHandle.className = 'resize-handle';
+        resizeHandle.addEventListener('mousedown', onResizeStart);
+        resizeHandle.addEventListener('touchstart', onResizeStart, { passive: false });
+        div.appendChild(resizeHandle);
+
+        div.addEventListener('touchstart', e => {
+            if (e.target.closest('.node-actions button') || e.target.closest('.resize-handle')) return;
+            div.classList.add('touch-active');
+            setTimeout(() => div.classList.remove('touch-active'), 800);
+        });
+        div.addEventListener('mousedown', onNodeDragStart);
+        div.addEventListener('touchstart', onNodeDragStart, { passive: false });
+        div.addEventListener('dblclick', e => { e.stopPropagation(); startEditing(node.id); });
+
+        nodesLayer.appendChild(div);
+        return div;
+    }
+
+    function onResizeStart(e) {
+        e.preventDefault(); e.stopPropagation();
+        const handle  = e.target.closest('.resize-handle');
+        if (!handle) return;
+        const nodeDiv = handle.closest('.node');
+        if (!nodeDiv) return;
+        const nodeId  = parseInt(nodeDiv.id.split('-')[1]);
+        resizeTarget  = nodes.find(n => n.id === nodeId);
+        if (!resizeTarget) return;
+        const rect = nodeDiv.getBoundingClientRect();
+        resizeStartWidth  = rect.width;
+        resizeStartHeight = rect.height;
+        let clientX, clientY;
+        if (e.type === 'mousedown') {
+            clientX = e.clientX; clientY = e.clientY;
+            window.addEventListener('mousemove', onResizeMove);
+            window.addEventListener('mouseup',   onResizeEnd);
+        } else {
+            const t = e.touches[0];
+            clientX = t.clientX; clientY = t.clientY;
+            activeTouchId = t.identifier;
+            window.addEventListener('touchmove',   onResizeMove, { passive: false });
+            window.addEventListener('touchend',    onResizeEnd);
+            window.addEventListener('touchcancel', onResizeEnd);
+        }
+        resizeStartX = clientX; resizeStartY = clientY;
+        isResizing = true;
+    }
+
+    function onResizeMove(e) {
+        if (!isResizing || !resizeTarget) return;
+        e.preventDefault();
+        let clientX, clientY;
+        if (e.type === 'mousemove') {
+            clientX = e.clientX; clientY = e.clientY;
+        } else {
+            const t = Array.from(e.touches).find(t => t.identifier === activeTouchId);
+            if (!t) return;
+            clientX = t.clientX; clientY = t.clientY;
+        }
+        const newW = Math.max(100, Math.min(400, resizeStartWidth  + (clientX - resizeStartX)));
+        const newH = Math.max(50,  Math.min(350, resizeStartHeight + (clientY - resizeStartY)));
+        resizeTarget.width  = newW;
+        resizeTarget.height = newH;
+        const div = document.getElementById(`node-${resizeTarget.id}`);
+        if (div) { div.style.width = `${newW}px`; div.style.height = `${newH}px`; }
+        drawAllLines();
+    }
+
+    function onResizeEnd() {
+        if (isResizing && resizeTarget) { saveToHistory(); saveToLocalStorage(); updateStatus('Размер изменён'); }
+        isResizing = false; resizeTarget = null;
+        window.removeEventListener('mousemove',    onResizeMove);
+        window.removeEventListener('mouseup',      onResizeEnd);
+        window.removeEventListener('touchmove',    onResizeMove);
+        window.removeEventListener('touchend',     onResizeEnd);
+        window.removeEventListener('touchcancel',  onResizeEnd);
+    }
+
+    function onNodeDragStart(e) {
+        if (editingNodeId) finishEditing();
+        if (e.target.closest('.node-actions button') || e.target.closest('.resize-handle')) return;
+        if (e.touches && e.touches.length > 1) return;
+        e.preventDefault(); e.stopPropagation();
+        let clientX, clientY;
+        if (e.type === 'mousedown') {
+            clientX = e.clientX; clientY = e.clientY;
+        } else {
+            const t = e.touches[0];
+            clientX = t.clientX; clientY = t.clientY;
+            activeTouchId = t.identifier;
+        }
+        const targetDiv = e.target.closest('.node');
+        if (!targetDiv) return;
+        const nodeId = parseInt(targetDiv.id.split('-')[1]);
+        const node   = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        const vr = viewport.getBoundingClientRect();
+        dragOffsetX = clientX - (node.x * scale + panX + vr.left);
+        dragOffsetY = clientY - (node.y * scale + panY + vr.top);
+        dragTarget = node; isDraggingNode = true;
+        targetDiv.style.cursor = 'grabbing';
+        targetDiv.style.zIndex = '999';
+        if (e.type === 'mousedown') {
+            window.addEventListener('mousemove', onNodeDragMove);
+            window.addEventListener('mouseup',   onNodeDragEnd);
+        } else {
+            window.addEventListener('touchmove',   onNodeDragMove, { passive: false });
+            window.addEventListener('touchend',    onNodeDragEnd);
+            window.addEventListener('touchcancel', onNodeDragEnd);
+        }
+    }
+
+    function onNodeDragMove(e) {
+        if (!isDraggingNode || !dragTarget) return;
+        e.preventDefault();
+        let clientX, clientY;
+        if (e.type === 'mousemove') {
+            clientX = e.clientX; clientY = e.clientY;
+        } else {
+            const t = Array.from(e.touches).find(t => t.identifier === activeTouchId);
+            if (!t) return;
+            clientX = t.clientX; clientY = t.clientY;
+        }
+        const vr = viewport.getBoundingClientRect();
+        let nx = (clientX - dragOffsetX - vr.left - panX) / scale;
+        let ny = (clientY - dragOffsetY - vr.top  - panY) / scale;
+        nx = Math.min(Math.max(-1500, nx), 3500);
+        ny = Math.min(Math.max(-1500, ny), 3000);
+        dragTarget.x = nx; dragTarget.y = ny;
+        const div = document.getElementById(`node-${dragTarget.id}`);
+        if (div) { div.style.left = `${nx}px`; div.style.top = `${ny}px`; }
+        drawAllLines();
+    }
+
+    function onNodeDragEnd() {
+        if (isDraggingNode && dragTarget) {
+            const div = document.getElementById(`node-${dragTarget.id}`);
+            if (div) { div.style.cursor = 'grab'; div.style.zIndex = '10'; }
+            saveToHistory(); saveToLocalStorage(); updateStatus('Позиция сохранена');
+        }
+        isDraggingNode = false; dragTarget = null; activeTouchId = null;
+        window.removeEventListener('mousemove',    onNodeDragMove);
+        window.removeEventListener('mouseup',      onNodeDragEnd);
+        window.removeEventListener('touchmove',    onNodeDragMove);
+        window.removeEventListener('touchend',     onNodeDragEnd);
+        window.removeEventListener('touchcancel',  onNodeDragEnd);
+    }
+
+    function getTouchDistance(t) {
+        const dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+        return Math.hypot(dx, dy);
+    }
+    function getTouchCenter(t) {
+        if (t.length === 1) return { x: t[0].clientX, y: t[0].clientY };
+        return { x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 };
+    }
+
+    function onTouchStart(e) {
+        if (isDraggingNode || isResizing) return;
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            activePinch = true;
+            initialPinchDistance = getTouchDistance(e.touches);
+            pinchStartScale = scale; pinchStartPanX = panX; pinchStartPanY = panY;
+            const center = getTouchCenter(e.touches);
+            const vr = viewport.getBoundingClientRect();
+            pinchCenterX = center.x - vr.left; pinchCenterY = center.y - vr.top;
+        } else if (e.touches.length === 1 && !activePinch) {
+            const t = e.touches[0];
+            const el = document.elementFromPoint(t.clientX, t.clientY);
+            if (!el?.closest?.('.node') && !el?.closest?.('.node-actions') && !el?.closest?.('.resize-handle')) {
+                isPanning = true;
+                panStartX = t.clientX - panX; panStartY = t.clientY - panY;
+                e.preventDefault();
+            }
+        }
+    }
+
+    function onTouchMove(e) {
+        if (isDraggingNode || isResizing) return;
+        if (activePinch && e.touches.length === 2) {
+            e.preventDefault();
+            const nd = getTouchDistance(e.touches);
+            if (initialPinchDistance > 0) {
+                let ns = pinchStartScale * (nd / initialPinchDistance);
+                ns = Math.min(Math.max(0.08, ns), 12);
+                panX = pinchStartPanX + (pinchCenterX - pinchStartPanX) * (1 - ns / pinchStartScale);
+                panY = pinchStartPanY + (pinchCenterY - pinchStartPanY) * (1 - ns / pinchStartScale);
+                scale = ns;
+                updateTransform();
+            }
+        } else if (isPanning && e.touches.length === 1) {
+            const t = e.touches[0];
+            panX = t.clientX - panStartX; panY = t.clientY - panStartY;
+            updateTransform(); e.preventDefault();
+        }
+    }
+
+    function onTouchEnd() {
+        if (activePinch) { activePinch = false; saveToLocalStorage(); }
+        if (isPanning)   { isPanning   = false; saveToLocalStorage(); }
+    }
+
+    let isMousePanning = false, mousePanStartX = 0, mousePanStartY = 0;
+    function onMouseDown(e) {
+        if (e.target.closest('.node') || e.target.closest('.node-actions') || e.target.closest('.resize-handle')) return;
+        isMousePanning = true;
+        mousePanStartX = e.clientX - panX; mousePanStartY = e.clientY - panY;
+        e.preventDefault();
+    }
+    function onMouseMove(e) {
+        if (isMousePanning && !isDraggingNode && !isResizing) {
+            panX = e.clientX - mousePanStartX; panY = e.clientY - mousePanStartY;
+            updateTransform(); e.preventDefault();
+        }
+    }
+    function onMouseUp() { if (isMousePanning) { isMousePanning = false; saveToLocalStorage(); } }
+
+    function addChildNode(parentId) {
+        withHistory(() => {
+            const parent = nodes.find(n => n.id === parentId);
+            if (!parent) return;
+            let cx = Math.min(Math.max(-1200, parent.x + 220), 3200);
+            let cy = Math.min(Math.max(-1200, parent.y + (Math.random() * 100 - 50)), 2800);
+            nodes.push({ id: nextId++, text: 'Новая идея 💡', x: cx, y: cy, parentId, width: 140, height: 'auto' });
+        });
+    }
+
+    function deleteNodeAndChildren(nodeId) {
+        withHistory(() => {
+            const toDelete = new Set();
+            const collect = id => {
+                toDelete.add(id);
+                nodes.filter(n => n.parentId === id).forEach(ch => collect(ch.id));
+            };
+            collect(nodeId);
+            nodes = nodes.filter(n => !toDelete.has(n.id));
+        });
+    }
+
+    function addRootNode() {
+        withHistory(() => {
+            nodes.push({ id: nextId++, text: 'Центральная тема 🎯', x: 400, y: 300, parentId: null, width: 150, height: 'auto' });
+        });
+    }
+
+    function clearAll() {
+        if (confirm('Удалить все блоки?')) withHistory(() => { nodes = []; nextId = 1; });
+    }
+
+    function zoomToFit() {
+        if (!nodes.length) { updateStatus('Нет блоков для обзора'); return; }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        nodes.forEach(node => {
+            const div = document.getElementById(`node-${node.id}`);
+            const w = div ? div.offsetWidth : (node.width || 140);
+            const h = div ? div.offsetHeight : (node.height !== 'auto' ? node.height : 60);
+            minX = Math.min(minX, node.x);
+            minY = Math.min(minY, node.y);
+            maxX = Math.max(maxX, node.x + w);
+            maxY = Math.max(maxY, node.y + h);
+        });
+        const worldWidth = maxX - minX;
+        const worldHeight = maxY - minY;
+        const vr = viewport.getBoundingClientRect();
+        const viewW = vr.width;
+        const viewH = vr.height;
+        const padding = 40;
+        let fitScaleX = (viewW - padding) / worldWidth;
+        let fitScaleY = (viewH - padding) / worldHeight;
+        let newScale = Math.min(fitScaleX, fitScaleY, 3.5);
+        newScale = Math.max(0.2, Math.min(8, newScale));
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        panX = viewW / 2 - centerX * newScale;
+        panY = viewH / 2 - centerY * newScale;
+        scale = newScale;
+        updateTransform();
+        updateStatus('🔍 Вся карта в обзоре');
+        saveToLocalStorageSilent();
+    }
+
+    function startEditing(nodeId) {
+        if (editingNodeId) finishEditing();
+        const nodeDiv = document.getElementById(`node-${nodeId}`);
+        if (!nodeDiv) return;
+        const contentDiv = nodeDiv.querySelector('.node-content');
+        const oldText = contentDiv.innerText;
+        const input = document.createElement('textarea');
+        input.value = oldText;
+        input.style.cssText = 'width:100%;padding:8px;border-radius:20px;border:2px solid #c084fc;font-family:inherit;font-size:14px;resize:none;';
+        input.rows = 2;
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(input);
+        nodeDiv.classList.add('editing');
+        input.focus();
+        const saveEdit = () => {
+            const newText = input.value.trim();
+            const node = nodes.find(n => n.id === nodeId);
+            if (node) node.text = newText || oldText;
+            finishEditing();
+            renderAllNodes();
+            applyUnifiedColorsToAllNodes();
+            saveToHistory(); saveToLocalStorage();
+        };
+        input.addEventListener('blur', saveEdit);
+        input.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+            if (e.key === 'Escape') { finishEditing(); renderAllNodes(); applyUnifiedColorsToAllNodes(); }
+        });
+        editingNodeId = nodeId;
+    }
+
+    function finishEditing() {
+        if (editingNodeId) {
+            const div = document.getElementById(`node-${editingNodeId}`);
+            if (div) div.classList.remove('editing');
+            editingNodeId = null;
+        }
+    }
+
+    function buildSaveData() {
+        return {
+            nodes: nodes.map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, parentId: n.parentId, width: n.width, height: n.height })),
+            nextId,
+            view: { scale, panX, panY }
+        };
+    }
+
+    function saveToLocalStorage() {
+        localStorage.setItem('mindmap_unified_full', JSON.stringify(buildSaveData()));
+        updateStatus('💾 Сохранено');
+    }
+
+    function saveToLocalStorageSilent() {
+        localStorage.setItem('mindmap_unified_full', JSON.stringify(buildSaveData()));
+    }
+
+    function loadFromLocalStorage() {
+        const saved = localStorage.getItem('mindmap_unified_full');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                nodes = data.nodes; nextId = data.nextId;
+                if (data.view) { scale = data.view.scale; panX = data.view.panX; panY = data.view.panY; }
+                scale = Math.min(Math.max(0.08, scale), 12);
+                renderAllNodes();
+                applyUnifiedColorsToAllNodes();
+                updateTransform();
+                updateStatus('Загружено');
+            } catch(e) { updateStatus('Ошибка загрузки'); }
+        } else {
+            nodes = []; nextId = 1;
+            const root   = { id: nextId++, text: '🌸 Моя карта мыслей',    x: 400, y: 300, parentId: null,    width: 160, height: 'auto' };
+            const child1 = { id: nextId++, text: '✨ Идея развития',        x: 650, y: 200, parentId: root.id,  width: 140, height: 'auto' };
+            const child2 = { id: nextId++, text: '🎨 Креативные решения',   x: 650, y: 420, parentId: root.id,  width: 150, height: 'auto' };
+            const grand  = { id: nextId++, text: '🌟 Детализация',          x: 880, y: 280, parentId: child1.id,width: 130, height: 'auto' };
+            nodes.push(root, child1, child2, grand);
+            scale = 1; panX = 0; panY = 0;
+            renderAllNodes();
+            applyUnifiedColorsToAllNodes();
+            updateTransform();
+            updateStatus('✨ Демо-карта (стрелки фикс)');
+        }
+        drawAllLines();
+        saveToHistory();
+    }
+
+    async function exportFullMap(format = 'png') {
+        if (!nodes.length) { updateStatus('Нет блоков для экспорта'); return; }
+        if (editingNodeId) finishEditing();
+        await new Promise(r => setTimeout(r, 80));
+        const PADDING = 80;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        nodes.forEach(node => {
+            const div = document.getElementById(`node-${node.id}`);
+            const w = div ? div.offsetWidth  : (node.width  || 140);
+            const h = div ? div.offsetHeight : (node.height !== 'auto' ? node.height : 60);
+            minX = Math.min(minX, node.x);
+            minY = Math.min(minY, node.y);
+            maxX = Math.max(maxX, node.x + w);
+            maxY = Math.max(maxY, node.y + h);
+        });
+        const mapW = maxX - minX + PADDING * 2;
+        const mapH = maxY - minY + PADDING * 2;
+        const ox   = PADDING - minX;
+        const oy   = PADDING - minY;
+        exportContainer.innerHTML = '';
+        exportContainer.style.cssText = `position: fixed; top: -99999px; left: -99999px; width: ${mapW}px; height: ${mapH}px; background: #faf5ff; overflow: visible; z-index: -1;`;
+        const expCanvas = document.createElement('canvas');
+        expCanvas.width  = mapW;
+        expCanvas.height = mapH;
+        expCanvas.style.cssText = `position:absolute;top:0;left:0;width:${mapW}px;height:${mapH}px;`;
+        exportContainer.appendChild(expCanvas);
+        const ec = expCanvas.getContext('2d');
+        const nodeSizes = {};
+        nodes.forEach(node => {
+            const div = document.getElementById(`node-${node.id}`);
+            nodeSizes[node.id] = { w: div ? div.offsetWidth : (node.width || 140), h: div ? div.offsetHeight : (node.height !== 'auto' ? node.height : 60) };
+        });
+        nodes.forEach(node => {
+            if (node.parentId === null) return;
+            const parent = nodes.find(n => n.id === node.parentId);
+            if (!parent) return;
+            const ps = nodeSizes[parent.id];
+            const cs = nodeSizes[node.id];
+            const sx = parent.x + ox + ps.w / 2;
+            const sy = parent.y + oy + ps.h / 2;
+            const ex = node.x   + ox + cs.w / 2;
+            const ey = node.y   + oy + cs.h / 2;
+            drawArrow(ec, sx, sy, ex, ey, '#a78bfa', 2.5);
+        });
+        nodes.forEach(node => {
+            const origDiv = document.getElementById(`node-${node.id}`);
+            if (!origDiv) return;
+            const clone = origDiv.cloneNode(true);
+            clone.querySelectorAll('.node-actions, .resize-handle').forEach(el => el.remove());
+            clone.style.backdropFilter = 'none';
+            clone.style.webkitBackdropFilter = 'none';
+            clone.style.position = 'absolute';
+            clone.style.left     = `${node.x + ox}px`;
+            clone.style.top      = `${node.y + oy}px`;
+            clone.style.width    = `${nodeSizes[node.id].w}px`;
+            clone.style.margin   = '0';
+            clone.style.boxShadow = '0 4px 12px rgba(107,70,193,0.25)';
+            exportContainer.appendChild(clone);
+        });
+        await new Promise(r => setTimeout(r, 120));
+        try {
+            const captured = await html2canvas(exportContainer, { scale: 2, useCORS: false, allowTaint: true, logging: false, backgroundColor: '#faf5ff', width: mapW, height: mapH });
+            if (format === 'pdf') {
+                const { jsPDF } = window.jspdf;
+                const imgData = captured.toDataURL('image/png', 1.0);
+                const pdf = new jsPDF({ orientation: mapW > mapH ? 'landscape' : 'portrait', unit: 'pt', format: [mapW, mapH] });
+                pdf.addImage(imgData, 'PNG', 0, 0, mapW, mapH);
+                pdf.save(`mindmap_${Date.now()}.pdf`);
+                updateStatus('✅ PDF сохранён');
+            } else {
+                const mime = format === 'png' ? 'image/png' : 'image/jpeg';
+                const ext  = format === 'png' ? 'png' : 'jpg';
+                const link = document.createElement('a');
+                link.download = `mindmap_${Date.now()}.${ext}`;
+                link.href     = captured.toDataURL(mime, 0.97);
+                link.click();
+                updateStatus(`✅ ${format.toUpperCase()} сохранён`);
+            }
+        } catch(err) { updateStatus('❌ Ошибка экспорта'); }
+        finally { exportContainer.innerHTML = ''; }
+    }
+
+    function updateStatus(msg) {
+        const el = document.getElementById('statusMsg');
+        if (el) el.innerHTML = msg;
+        setTimeout(() => { if (document.getElementById('statusMsg')?.innerHTML === msg) document.getElementById('statusMsg').innerHTML = '✨ Готово'; }, 2500);
+    }
+
+    viewport.addEventListener('touchstart',  onTouchStart, { passive: false });
+    viewport.addEventListener('touchmove',   onTouchMove,  { passive: false });
+    viewport.addEventListener('touchend',    onTouchEnd);
+    viewport.addEventListener('touchcancel', onTouchEnd);
+    viewport.addEventListener('mousedown',   onMouseDown);
+    window.addEventListener('mousemove',     onMouseMove);
+    window.addEventListener('mouseup',       onMouseUp);
+    window.addEventListener('resize', () => { resizeAndUpdate(); drawAllLines(); });
+
+    document.getElementById('btn-undo').onclick          = () => undo();
+    document.getElementById('btn-add-root').onclick      = () => addRootNode();
+    document.getElementById('btn-zoom-fit').onclick      = () => zoomToFit();
+    document.getElementById('btn-save-storage').onclick  = () => saveToLocalStorage();
+    document.getElementById('btn-load').onclick          = () => loadFromLocalStorage();
+    document.getElementById('btn-clear').onclick         = () => clearAll();
+    document.getElementById('btn-export-png').onclick    = () => exportFullMap('png');
+    document.getElementById('btn-export-jpeg').onclick   = () => exportFullMap('jpeg');
+    document.getElementById('btn-export-pdf').onclick    = () => exportFullMap('pdf');
+
+    resizeAndUpdate();
+    loadFromLocalStorage();
+    setInterval(() => drawAllLines(), 200);
+})();
+</script>
+</body>
+</html>
