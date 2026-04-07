@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Интерактивная карта мыслей | Mind Map с сохранением</title>
+    <!-- Font Awesome Icons (для иконок) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- html2canvas для экспорта в изображение (опционально, но приятно) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none; /* для удобства перетаскивания, но текст можно выделить через кнопки редактирования */
+        }
+
+        body {
+            background: linear-gradient(145deg, #e0eafc 0%, #cfdef3 100%);
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* тулбар сверху */
+        .toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(30, 30, 40, 0.85);
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding: 12px 24px;
+            z-index: 1000;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .toolbar button {
+            background: #ffffffdd;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 40px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .toolbar button i {
+            font-size: 16px;
+        }
+
+        .toolbar button:hover {
+            background: white;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .toolbar .btn-primary {
+            background: #2c7da0;
+            color: white;
+        }
+        .toolbar .btn-primary:hover {
+            background: #1f5e7a;
+        }
+        .toolbar .btn-danger {
+            background: #e07a5f;
+            color: white;
+        }
+        .toolbar .btn-danger:hover {
+            background: #c05a3f;
+        }
+        .toolbar .btn-save {
+            background: #2a9d8f;
+            color: white;
+        }
+
+        .status-msg {
+            background: #1e2a36ee;
+            color: #d4eaff;
+            padding: 5px 12px;
+            border-radius: 30px;
+            font-size: 13px;
+            margin-left: 10px;
+        }
+
+        /* контейнер для канваса и всей карты */
+        #mindmap-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            margin-top: 65px;
+            background: #fef9e8;
+            background-image: radial-gradient(circle at 10% 20%, rgba(200,212,220,0.2) 2%, transparent 2.5%);
+            background-size: 28px 28px;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: block;
+            background: transparent;
+            pointer-events: none;  /* линии не перехватывают клики */
+        }
+
+        /* узлы — абсолютные блоки */
+        .node {
+            position: absolute;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 12px 20px;
+            min-width: 140px;
+            max-width: 260px;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.05);
+            border: 1px solid rgba(0,0,0,0.1);
+            cursor: grab;
+            transition: box-shadow 0.1s, transform 0.05s linear;
+            font-weight: 500;
+            backdrop-filter: blur(2px);
+            z-index: 10;
+            word-break: break-word;
+            font-size: 15px;
+            background: linear-gradient(135deg, #fff, #f9fafc);
+        }
+        .node:active {
+            cursor: grabbing;
+        }
+        .node.editing {
+            outline: 3px solid #ffb347;
+            background: #fff7e8;
+            cursor: text;
+        }
+        .node .node-content {
+            outline: none;
+            white-space: pre-wrap;
+        }
+        .node .node-actions {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            display: flex;
+            gap: 6px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            background: rgba(0,0,0,0.5);
+            border-radius: 30px;
+            padding: 4px 6px;
+            backdrop-filter: blur(4px);
+        }
+        .node:hover .node-actions {
+            opacity: 1;
+        }
+        .node-actions button {
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.1s;
+            font-weight: bold;
+        }
+        .node-actions button.add-child {
+            background: #34a0a4;
+            color: white;
+        }
+        .node-actions button.delete-node {
+            background: #e63946;
+            color: white;
+        }
+        .node-actions button.edit-text {
+            background: #f4a261;
+            color: white;
+        }
+
+        /* вспомогательный UI */
+        .instruction {
+            position: fixed;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0,0,0,0.6);
+            color: #eee;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            backdrop-filter: blur(5px);
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <button id="btn-add-root"><i class="fas fa-plus-circle"></i> Добавить центральный блок</button>
+    <button id="btn-save" class="btn-save"><i class="fas fa-save"></i> Сохранить карту</button>
+    <button id="btn-load" class="btn-primary"><i class="fas fa-folder-open"></i> Загрузить последнюю</button>
+    <button id="btn-clear" class="btn-danger"><i class="fas fa-trash-alt"></i> Очистить всё</button>
+    <span class="status-msg" id="statusMsg">✅ Готово</span>
+</div>
+<div id="mindmap-container">
+    <!-- Здесь будут динамически создаваться .node элементы -->
+</div>
+<div class="instruction">
+    <i class="fas fa-mouse-pointer"></i> Перетащи блоки за заголовок | ✏️ Кнопки на блоках: + (добавить потомка), ✎ (редактировать), 🗑️ (удалить)
+</div>
+
+<script>
+    // ----- Управление картой мыслей (ноды, связи, рисование линий, сохранение) -----
+    const container = document.getElementById('mindmap-container');
+    let nodes = [];           // массив объектов { id, text, x, y, parentId }
+    let nextId = 1;
+    let dragTarget = null;
+    let dragOffsetX = 0, dragOffsetY = 0;
+    let isDragging = false;
+
+    // Для редактирования текста
+    let editingNodeId = null;
+
+    // Canvas для линий
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    container.appendChild(canvas);
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '5';
+
+    function resizeCanvas() {
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        canvas.style.width = `${rect.width}px`;
+        canvas.style.height = `${rect.height}px`;
+        drawAllLines();
+    }
+
+    window.addEventListener('resize', () => {
+        resizeCanvas();
+        drawAllLines();
+        // дополнительно скорректируем позиции нод, если выходят за границы
+        normalizeNodePositions();
+    });
+
+    // функция перерисовки линий между родителем и детьми
+    function drawAllLines() {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (nodes.length === 0) return;
+
+        const containerRect = container.getBoundingClientRect();
+        for (let node of nodes) {
+            if (node.parentId !== null) {
+                const parentNode = nodes.find(n => n.id === node.parentId);
+                if (parentNode) {
+                    const fromElem = document.getElementById(`node-${parentNode.id}`);
+                    const toElem = document.getElementById(`node-${node.id}`);
+                    if (fromElem && toElem) {
+                        const fromRect = fromElem.getBoundingClientRect();
+                        const toRect = toElem.getBoundingClientRect();
+                        const startX = (fromRect.left + fromRect.right) / 2 - containerRect.left;
+                        const startY = (fromRect.top + fromRect.bottom) / 2 - containerRect.top;
+                        const endX = (toRect.left + toRect.right) / 2 - containerRect.left;
+                        const endY = (toRect.top + toRect.bottom) / 2 - containerRect.top;
+
+                        ctx.beginPath();
+                        ctx.moveTo(startX, startY);
+                        ctx.lineTo(endX, endY);
+                        ctx.strokeStyle = '#6c757d';
+                        ctx.lineWidth = 3;
+                        ctx.shadowBlur = 0;
+                        ctx.stroke();
+
+                        // стрелочка на конце (опционально)
+                        const angle = Math.atan2(endY - startY, endX - startX);
+                        const arrowSize = 10;
+                        const arrowX = endX - 12 * Math.cos(angle);
+                        const arrowY = endY - 12 * Math.sin(angle);
+                        ctx.fillStyle = '#6c757d';
+                        ctx.beginPath();
+                        ctx.moveTo(arrowX, arrowY);
+                        ctx.lineTo(arrowX - arrowSize * Math.cos(angle - Math.PI/6), arrowY - arrowSize * Math.sin(angle - Math.PI/6));
+                        ctx.lineTo(arrowX - arrowSize * Math.cos(angle + Math.PI/6), arrowY - arrowSize * Math.sin(angle + Math.PI/6));
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+    }
+
+    // обновить отображение всех DOM узлов (рендер по массиву nodes)
+    function renderAllNodes() {
+        // удаляем все существующие .node элементы, кроме canvas
+        const existingNodes = document.querySelectorAll('#mindmap-container .node');
+        existingNodes.forEach(el => el.remove());
+
+        for (let node of nodes) {
+            createNodeElement(node);
+        }
+        drawAllLines();
+        updateStatus('Карта обновлена');
+    }
+
+    // создать HTML элемент для ноды и добавить в container
+    function createNodeElement(node) {
+        const div = document.createElement('div');
+        div.className = 'node';
+        div.id = `node-${node.id}`;
+        div.style.left = `${node.x}px`;
+        div.style.top = `${node.y}px`;
+        div.style.position = 'absolute';
+        div.style.cursor = 'grab';
+        
+        // контент
+        const contentSpan = document.createElement('div');
+        contentSpan.className = 'node-content';
+        contentSpan.innerText = node.text || 'Новый блок';
+        contentSpan.setAttribute('data-id', node.id);
+        
+        // контейнер для кнопок
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'node-actions';
+        
+        const addBtn = document.createElement('button');
+        addBtn.innerHTML = '<i class="fas fa-plus"></i>';
+        addBtn.title = 'Добавить потомка';
+        addBtn.className = 'add-child';
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            addChildNode(node.id);
+        };
+        
+        const editBtn = document.createElement('button');
+        editBtn.innerHTML = '<i class="fas fa-pen"></i>';
+        editBtn.title = 'Редактировать текст';
+        editBtn.className = 'edit-text';
+        editBtn.onclick = (e) => {
+            e.stopPropagation();
+            startEditing(node.id);
+        };
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.title = 'Удалить блок (и всех потомков)';
+        deleteBtn.className = 'delete-node';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            deleteNodeAndChildren(node.id);
+        };
+        
+        actionsDiv.appendChild(addBtn);
+        actionsDiv.appendChild(editBtn);
+        actionsDiv.appendChild(deleteBtn);
+        
+        div.appendChild(contentSpan);
+        div.appendChild(actionsDiv);
+        
+        // drag and drop
+        div.addEventListener('mousedown', onMouseDown);
+        div.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            startEditing(node.id);
+        });
+        
+        container.appendChild(div);
+        return div;
+    }
+
+    // добавить потомка к выбранной ноде
+    function addChildNode(parentId) {
+        const parentNode = nodes.find(n => n.id === parentId);
+        if (!parentNode) return;
+        // новая позиция: немного правее и ниже
+        let childX = parentNode.x + 180;
+        let childY = parentNode.y + (Math.random() * 60 - 30);
+        // проверка границ контейнера
+        const maxX = container.clientWidth - 200;
+        const maxY = container.clientHeight - 100;
+        childX = Math.min(Math.max(10, childX), maxX);
+        childY = Math.min(Math.max(10, childY), maxY);
+        
+        const newNode = {
+            id: nextId++,
+            text: 'Новая идея',
+            x: childX,
+            y: childY,
+            parentId: parentId
+        };
+        nodes.push(newNode);
+        renderAllNodes();
+        saveToLocalStorage();
+    }
+    
+    // редактирование текста
+    function startEditing(nodeId) {
+        if (editingNodeId !== null) {
+            // завершить предыдущее редактирование, если есть
+            finishEditing();
+        }
+        const nodeDiv = document.getElementById(`node-${nodeId}`);
+        if (!nodeDiv) return;
+        const contentDiv = nodeDiv.querySelector('.node-content');
+        const oldText = contentDiv.innerText;
+        // заменяем содержимое на input
+        const input = document.createElement('textarea');
+        input.value = oldText;
+        input.style.width = '100%';
+        input.style.fontSize = '14px';
+        input.style.padding = '8px';
+        input.style.borderRadius = '16px';
+        input.style.border = '2px solid #ffb347';
+        input.style.background = 'white';
+        input.style.fontFamily = 'inherit';
+        input.style.resize = 'vertical';
+        input.rows = 2;
+        
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(input);
+        nodeDiv.classList.add('editing');
+        input.focus();
+        
+        const saveEdit = () => {
+            const newText = input.value.trim();
+            if (newText !== "") {
+                const node = nodes.find(n => n.id === nodeId);
+                if (node) node.text = newText;
+            } else {
+                // если пусто, оставляем как было
+                const node = nodes.find(n => n.id === nodeId);
+                if (node && oldText) node.text = oldText;
+            }
+            finishEditing();
+            renderAllNodes(); // перерисуем текст
+            saveToLocalStorage();
+        };
+        
+        input.addEventListener('blur', saveEdit);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                saveEdit();
+            }
+            if (e.key === 'Escape') {
+                finishEditing();
+                renderAllNodes();
+            }
+        });
+        editingNodeId = nodeId;
+    }
+    
+    function finishEditing() {
+        if (editingNodeId !== null) {
+            const oldDiv = document.getElementById(`node-${editingNodeId}`);
+            if (oldDiv) oldDiv.classList.remove('editing');
+            editingNodeId = null;
+        }
+    }
+    
+    // удаление ноды и всех её потомков (рекурсивно)
+    function deleteNodeAndChildren(nodeId) {
+        // собираем все id для удаления (включая потомков)
+        const toDelete = new Set();
+        function collect(id) {
+            toDelete.add(id);
+            const children = nodes.filter(n => n.parentId === id);
+            children.forEach(child => collect(child.id));
+        }
+        collect(nodeId);
+        nodes = nodes.filter(n => !toDelete.has(n.id));
+        renderAllNodes();
+        saveToLocalStorage();
+        updateStatus('Удалено');
+    }
+    
+    // добавить корневой (центральный) блок — без родителя
+    function addRootNode() {
+        const centerX = container.clientWidth / 2 - 80;
+        const centerY = container.clientHeight / 2 - 50;
+        const newNode = {
+            id: nextId++,
+            text: 'Центральная идея',
+            x: Math.max(20, centerX),
+            y: Math.max(20, centerY),
+            parentId: null
+        };
+        nodes.push(newNode);
+        renderAllNodes();
+        saveToLocalStorage();
+        updateStatus('Добавлен центральный блок');
+    }
+    
+    // Очистить всё
+    function clearAll() {
+        if (confirm('Удалить все блоки карты? Это действие нельзя отменить.')) {
+            nodes = [];
+            nextId = 1;
+            renderAllNodes();
+            saveToLocalStorage();
+            updateStatus('Карта очищена');
+        }
+    }
+    
+    // сохранение в localStorage
+    function saveToLocalStorage() {
+        const dataToStore = {
+            nodes: nodes.map(n => ({ id: n.id, text: n.text, x: n.x, y: n.y, parentId: n.parentId })),
+            nextId: nextId
+        };
+        localStorage.setItem('mindmap_data', JSON.stringify(dataToStore));
+        updateStatus('💾 Сохранено в браузере');
+        setTimeout(() => updateStatus('✅ Готово'), 1500);
+    }
+    
+    // загрузка из localStorage
+    function loadFromLocalStorage() {
+        const saved = localStorage.getItem('mindmap_data');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                nodes = data.nodes;
+                nextId = data.nextId;
+                // проверка на валидность (приведение)
+                if (!nodes) nodes = [];
+                renderAllNodes();
+                updateStatus('Загружена последняя карта');
+                normalizeNodePositions();
+            } catch(e) { console.warn(e); updateStatus('Ошибка загрузки'); }
+        } else {
+            // демо-пример: создадим пару демо-нод для наглядности
+            nodes = [];
+            nextId = 1;
+            const root = { id: nextId++, text: '🚀 Моя карта мыслей', x: 300, y: 180, parentId: null };
+            const child1 = { id: nextId++, text: 'Идея 1', x: 520, y: 130, parentId: root.id };
+            const child2 = { id: nextId++, text: 'Идея 2', x: 520, y: 230, parentId: root.id };
+            const subchild = { id: nextId++, text: 'Детали', x: 720, y: 200, parentId: child1.id };
+            nodes.push(root, child1, child2, subchild);
+            renderAllNodes();
+            updateStatus('Пример загружен (впервые)');
+        }
+        drawAllLines();
+    }
+    
+    // для коррекции вылетающих нод
+    function normalizeNodePositions() {
+        const containerRect = container.getBoundingClientRect();
+        let changed = false;
+        nodes.forEach(node => {
+            let newX = node.x;
+            let newY = node.y;
+            if (node.x + 150 > containerRect.width) newX = Math.max(10, containerRect.width - 170);
+            if (node.y + 70 > containerRect.height) newY = Math.max(10, containerRect.height - 90);
+            if (node.x < 10) newX = 10;
+            if (node.y < 10) newY = 10;
+            if (newX !== node.x || newY !== node.y) {
+                node.x = newX;
+                node.y = newY;
+                changed = true;
+            }
+        });
+        if (changed) {
+            renderAllNodes();
+        }
+    }
+    
+    // --- drag & drop логика ---
+    function onMouseDown(e) {
+        if (editingNodeId !== null) finishEditing();
+        const targetDiv = e.target.closest('.node');
+        if (!targetDiv) return;
+        const nodeId = parseInt(targetDiv.id.split('-')[1]);
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+        e.preventDefault();
+        dragTarget = node;
+        const rect = targetDiv.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        isDragging = true;
+        targetDiv.style.cursor = 'grabbing';
+        targetDiv.style.zIndex = '999';
+        
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+    }
+    
+    function onMouseMove(e) {
+        if (!isDragging || !dragTarget) return;
+        const containerRect = container.getBoundingClientRect();
+        let newLeft = e.clientX - containerRect.left - dragOffsetX;
+        let newTop = e.clientY - containerRect.top - dragOffsetY;
+        // границы
+        newLeft = Math.min(Math.max(0, newLeft), containerRect.width - 140);
+        newTop = Math.min(Math.max(0, newTop), containerRect.height - 60);
+        dragTarget.x = newLeft;
+        dragTarget.y = newTop;
+        const nodeDiv = document.getElementById(`node-${dragTarget.id}`);
+        if (nodeDiv) {
+            nodeDiv.style.left = `${newLeft}px`;
+            nodeDiv.style.top = `${newTop}px`;
+        }
+        drawAllLines();
+    }
+    
+    function onMouseUp() {
+        if (isDragging && dragTarget) {
+            const nodeDiv = document.getElementById(`node-${dragTarget.id}`);
+            if (nodeDiv) nodeDiv.style.cursor = 'grab';
+            nodeDiv.style.zIndex = '10';
+            saveToLocalStorage();
+        }
+        isDragging = false;
+        dragTarget = null;
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+    }
+    
+    function updateStatus(msg) {
+        const statusSpan = document.getElementById('statusMsg');
+        statusSpan.innerHTML = msg;
+        setTimeout(() => {
+            if (document.getElementById('statusMsg') && statusSpan.innerHTML === msg) {
+                // но не затираем важное мгновенное сообщение если оно сменилось
+            }
+        }, 2000);
+    }
+    
+    // инициализация UI и обработчиков кнопок
+    document.getElementById('btn-add-root').addEventListener('click', () => addRootNode());
+    document.getElementById('btn-save').addEventListener('click', () => { saveToLocalStorage(); updateStatus('Сохранено!'); });
+    document.getElementById('btn-load').addEventListener('click', () => loadFromLocalStorage());
+    document.getElementById('btn-clear').addEventListener('click', () => clearAll());
+    
+    // авторазмер канваса и наблюдение
+    const resizeObserver = new ResizeObserver(() => {
+        resizeCanvas();
+        drawAllLines();
+    });
+    resizeObserver.observe(container);
+    
+    // старт
+    loadFromLocalStorage();
+    resizeCanvas();
+    
+    // перерисовка линий при любых изменениях содержимого
+    const observer = new MutationObserver(() => drawAllLines());
+    observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+    
+    // обновление при прокрутке (нет прокрутки в основном, но запас)
+    window.addEventListener('scroll', () => drawAllLines());
+    setInterval(() => drawAllLines(), 500);
+    
+    // также при изменении позиции из-за кнопок
+    const originalRender = renderAllNodes;
+    window.renderAllNodes = renderAllNodes;
+    // перехват вызова, чтобы рисовать линии
+    const superRender = renderAllNodes;
+    renderAllNodes = function() {
+        superRender();
+        drawAllLines();
+    };
+    // обновим ссылки
+    window.renderAllNodes = renderAllNodes;
+    renderAllNodes();
+</script>
+</body>
+</html>
