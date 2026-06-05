@@ -9,6 +9,7 @@
 	background-color: var(--bg-color);
 }
 
+
 .page__body--no-scroll {
 	overflow-y: hidden;
 }
@@ -24,3 +25,4 @@ button:focus-visible {
 	outline-offset: 5px;
 	border-radius: 1px;
 }
+

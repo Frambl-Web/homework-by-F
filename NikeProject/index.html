@@ -9,11 +9,11 @@
 			href="./icons/nike-favicon.ico"
 			type="image/x-icon"
 		/>
-		<script defer src="./js/index.js" type="module"></script>
+		<script src="./js/index.js" type="module"></script>
 		<title>Nike AirMag</title>
 	</head>
 	<body class="page__body">
-		<header class="header header--fixed">
+		<header class="header">
 			<div class="container header__container">
 				<a href="/" class="logo header__logo">
 					<img
@@ -24,7 +24,11 @@
 						height="20"
 					/>
 				</a>
-				<nav class="menu header__menu" id="header__menu" aria-label="Главное меню">
+				<nav
+					class="menu header__menu"
+					id="header__menu"
+					aria-label="Главное меню"
+				>
 					<ul class="menu__list">
 						<li class="menu__item">
 							<a href="#air-mag" class="menu__link" lang="en"
@@ -94,5 +98,38 @@
 				</div>
 			</div>
 		</header>
+		<main class="main">
+			<section class="hero">
+				<div class="container hero__container">
+					<header class="hero__header">
+						<ul class="hero__benefits-list">
+							<li class="hero__benefits-item">Стиль</li>
+							<li class="hero__benefits-item">Скорость</li>
+						</ul>
+						<h1 class="hero__title">
+							Nike <span class="hero__title-accent">air</span> mag
+						</h1>
+					</header>
+					<img
+						class="hero__img"
+						src="./img/nike-air-mag-1.png"
+						width="846"
+						height="713"
+						alt="Кроссовок Nike Air Mag"
+					/>
+					<footer class="hero__footer">
+						<a href="#" class="hero__details">
+							Подробнее
+							<svg width="24" height="24">
+								<use
+									class="hero__details-icon"
+									href="./icons/main-sprite.svg#arrow-right"
+								></use>
+							</svg>
+						</a>
+					</footer>
+				</div>
+			</section>
+		</main>
 	</body>
 </html>
